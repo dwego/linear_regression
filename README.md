@@ -80,7 +80,7 @@ $$
 The derivative of $|e|$ with respect to $e$ is the **sign function**:
 
 $$
-\frac{d|e|}{de} = \operatorname{sign}(e) =
+\frac{d|e|}{de} = \text{sign}(e) =
 \begin{cases}
 +1 & e > 0 \\
 -1 & e < 0 \\
@@ -93,9 +93,9 @@ $$
 Applying the chain rule through $e_i = w \cdot x_i + b - y_i$:
 
 $$
-\frac{\partial MAE}{\partial w_j} = \frac{1}{n} \sum_{i=1}^{n} \operatorname{sign}(e_i) \, x_{i,j}
+\frac{\partial MAE}{\partial w_j} = \frac{1}{n} \sum_{i=1}^{n} \text{sign}(e_i) \, x_{i,j}
 \qquad
-\frac{\partial MAE}{\partial b} = \frac{1}{n} \sum_{i=1}^{n} \operatorname{sign}(e_i)
+\frac{\partial MAE}{\partial b} = \frac{1}{n} \sum_{i=1}^{n} \text{sign}(e_i)
 $$
 
 Unlike MSE's gradient, which shrinks as the error shrinks (proportional to `e`), MAE's gradient has constant magnitude regardless of how close the prediction is — only its *sign* depends on the error. That's why training with MAE tends to be noisier close to the minimum.

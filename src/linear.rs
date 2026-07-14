@@ -14,60 +14,9 @@ impl LinearRegression {
         epochs: usize,
         batch_size: usize,
     ) -> Result<Self, &'static str> {
-        let (mut weight, mut bias, _) =
-            Self::fit(x, y, alpha, epochs, batch_size)?;
-
-        for _epoch in 0..epochs {
-            let mut batch_start = 0;
-
-            while batch_start < x.rows() {
-                let batch_end = (batch_start + batch_size).min(x.rows());
-
-                let mut dw = vec![0.0; x.cols()];
-                let mut db = 0.0;
-
-                for row in batch_start..batch_end {
-                    let yi = y[row];
-
-                    let prediction = weight
-                        .iter()
-                        .enumerate()
-                        .map(|(col, &w)| w * x[[row, col].into()])
-                        .sum::<f64>()
-                        + bias;
-
-                    let error = prediction - yi;
-
-                    let error_sign = if error > 0.0 {
-                        1.0
-                    } else if error < 0.0 {
-                        -1.0
-                    } else {
-                        0.0
-                    };
-
-                    for col in 0..x.cols() {
-                        dw[col] += error_sign * x[[row, col].into()];
-                    }
-
-                    db += error_sign;
-                }
-
-                let current_batch_size = (batch_end - batch_start) as f64;
-
-                for col in 0..x.cols() {
-                    dw[col] /= current_batch_size;
-                    weight[col] -= alpha * dw[col];
-                }
-
-                db /= current_batch_size;
-                bias -= alpha * db;
-
-                batch_start = batch_end;
-            }
-        }
-
-        Ok(Self { weight, bias })
+        Self::fit_with_gradient(x, y, alpha, epochs, batch_size, |error| {
+            error.signum()
+        })
     }
 
     pub fn fit_mse(
@@ -77,46 +26,40 @@ impl LinearRegression {
         epochs: usize,
         batch_size: usize,
     ) -> Result<Self, &'static str> {
-        let (mut weight, mut bias, _) = match Self::fit(&x, y, alpha, epochs, batch_size) {
-            Ok(value) => value,
-            Err(value) => return Err(value),
-        };
+        Self::fit_with_gradient(x, y, alpha, epochs, batch_size, |error| {
+            2.0 * error
+        })
+    }
 
-        for _epoch in 0..epochs {
+    fn fit_with_gradient(
+        x: &Matrix,
+        y: &[f64],
+        alpha: f64,
+        epochs: usize,
+        batch_size: usize,
+        gradient_factor: impl Fn(f64) -> f64,
+    ) -> Result<Self, &'static str> {
+        Self::validate_training_input(x, y, alpha, epochs, batch_size)?;
+
+        let mut weight = vec![0.0; x.cols()];
+        let mut bias = 0.0;
+
+        for _ in 0..epochs {
             let mut batch_start = 0;
 
             while batch_start < x.rows() {
                 let batch_end = (batch_start + batch_size).min(x.rows());
 
-                let mut dw = vec![0.0; x.cols()];
-                let mut db = 0.0;
-
-                for row in batch_start..batch_end {
-                    let prediction = weight
-                        .iter()
-                        .enumerate()
-                        .map(|(col, &w)| w * x[[row, col].into()])
-                        .sum::<f64>()
-                        + bias;
-
-                    let error = prediction - y[row];
-
-                    for col in 0..x.cols() {
-                        dw[col] += 2.0 * error * x[[row, col].into()];
-                    }
-
-                    db += 2.0 * error;
-                }
-
-                let batch_len = (batch_end - batch_start) as f64;
-
-                for col in 0..x.cols() {
-                    dw[col] /= batch_len;
-                    weight[col] -= alpha * dw[col];
-                }
-
-                db /= batch_len;
-                bias -= alpha * db;
+                Self::update_batch(
+                    x,
+                    y,
+                    alpha,
+                    batch_start,
+                    batch_end,
+                    &mut weight,
+                    &mut bias,
+                    &gradient_factor,
+                );
 
                 batch_start = batch_end;
             }
@@ -125,13 +68,61 @@ impl LinearRegression {
         Ok(Self { weight, bias })
     }
 
-    fn fit(
+    fn update_batch(
+        x: &Matrix,
+        y: &[f64],
+        alpha: f64,
+        batch_start: usize,
+        batch_end: usize,
+        weight: &mut [f64],
+        bias: &mut f64,
+        gradient_factor: &impl Fn(f64) -> f64,
+    ) {
+        let mut dw = vec![0.0; x.cols()];
+        let mut db = 0.0;
+
+        for row in batch_start..batch_end {
+            let prediction = Self::prediction_for_row(x, row, weight, *bias);
+            let error = prediction - y[row];
+            let factor = gradient_factor(error);
+
+            for col in 0..x.cols() {
+                dw[col] += factor * x[[row, col].into()];
+            }
+
+            db += factor;
+        }
+
+        let batch_len = (batch_end - batch_start) as f64;
+
+        for col in 0..x.cols() {
+            weight[col] -= alpha * (dw[col] / batch_len);
+        }
+
+        *bias -= alpha * (db / batch_len);
+    }
+
+    fn prediction_for_row(
+        x: &Matrix,
+        row: usize,
+        weight: &[f64],
+        bias: f64,
+    ) -> f64 {
+        weight
+            .iter()
+            .enumerate()
+            .map(|(col, &w)| w * x[[row, col].into()])
+            .sum::<f64>()
+            + bias
+    }
+
+    fn validate_training_input(
         x: &Matrix,
         y: &[f64],
         alpha: f64,
         epochs: usize,
         batch_size: usize,
-    ) -> Result<(Vec<f64>, f64, f64), &'static str> {
+    ) -> Result<(), &'static str> {
         if x.rows() != y.len() {
             return Err("x and y must have the same number of rows");
         }
@@ -156,11 +147,7 @@ impl LinearRegression {
             return Err("batch_size must be greater than zero");
         }
 
-        let weight = vec![0.0; x.cols()];
-        let bias = 0.0;
-        let n = x.rows() as f64;
-
-        Ok((weight, bias, n))
+        Ok(())
     }
 
     pub fn predict(&self, x: &Matrix) -> Result<Vec<f64>, &'static str> {
@@ -168,19 +155,9 @@ impl LinearRegression {
             return Err("x must have the same number of columns as the model");
         }
 
-        let mut predictions = Vec::with_capacity(x.rows());
-
-        for row in 0..x.rows() {
-            let prediction = self
-                .weight
-                .iter()
-                .enumerate()
-                .map(|(col, &w)| w * x[[row, col].into()])
-                .sum::<f64>()
-                + self.bias;
-
-            predictions.push(prediction);
-        }
+        let predictions = (0..x.rows())
+            .map(|row| Self::prediction_for_row(x, row, &self.weight, self.bias))
+            .collect();
 
         Ok(predictions)
     }

@@ -84,7 +84,7 @@ mod tests {
             10.0,
         ];
 
-        let model = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 10_000).unwrap();
+        let model = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 10_000, 5).unwrap();
 
         assert_eq!(model.weight.len(), 1);
         assert_close(model.weight[0], 2.0, 0.01);
@@ -131,7 +131,7 @@ mod tests {
             17.0,
         ];
 
-        let model = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 10_000).unwrap();
+        let model = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 10_000, 6).unwrap();
 
         assert_eq!(model.weight.len(), 2);
 
@@ -184,9 +184,11 @@ mod tests {
             93_000.0,
         ];
 
-        let model = LinearRegression::fit_mse(&x_train.unwrap(), &y_train, 0.001, 100_000).unwrap();
+        let model =
+            LinearRegression::fit_mse(&x_train.unwrap(), &y_train, 0.001, 100_000, 8).unwrap();
 
         assert_eq!(model.weight.len(), 2);
+
 
         assert_close(model.weight[0], 3_000.0, 1.0);
         assert_close(model.weight[1], 2_000.0, 1.0);
@@ -233,9 +235,10 @@ mod tests {
             10.0,
         ];
 
-        let model = LinearRegression::fit_mae(&x.unwrap(), &y, 0.01, 10_000).unwrap();
+        let model = LinearRegression::fit_mae(&x.unwrap(), &y, 0.01, 10_000, 5).unwrap();
 
         assert_eq!(model.weight.len(), 1);
+
 
         let x_predict = Matrix::new(
             2,
@@ -271,7 +274,7 @@ mod tests {
             4.0,
         ];
 
-        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 100);
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 100, 3);
 
         assert!(result.is_err());
         assert_eq!(
@@ -294,7 +297,7 @@ mod tests {
             2.0,
         ];
 
-        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 100);
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 100, 1);
 
         assert!(result.is_err());
         assert_eq!(
@@ -319,7 +322,7 @@ mod tests {
             4.0,
         ];
 
-        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.0, 100);
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.0, 100, 2);
 
         assert!(result.is_err());
         assert_eq!(
@@ -344,7 +347,7 @@ mod tests {
             4.0,
         ];
 
-        let result = LinearRegression::fit_mse(&x.unwrap(), &y, -0.01, 100);
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, -0.01, 100, 2);
 
         assert!(result.is_err());
         assert_eq!(
@@ -369,7 +372,7 @@ mod tests {
             4.0,
         ];
 
-        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 0);
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 0, 2);
 
         assert!(result.is_err());
         assert_eq!(
@@ -393,12 +396,37 @@ mod tests {
             2.0,
         ];
 
-        let result = LinearRegression::fit_mae(&x.unwrap(), &y, 0.01, 100);
+        let result = LinearRegression::fit_mae(&x.unwrap(), &y, 0.01, 100, 2);
 
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),
             "x and y must have the same number of rows"
+        );
+    }
+
+    #[test]
+    fn fit_mse_should_return_error_when_batch_size_is_zero() {
+        let x = Matrix::new(
+            2,
+            1,
+            vec![
+                1.0,
+                2.0,
+            ],
+        );
+
+        let y = vec![
+            2.0,
+            4.0,
+        ];
+
+        let result = LinearRegression::fit_mse(&x.unwrap(), &y, 0.01, 100, 0);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "batch_size must be greater than zero"
         );
     }
 }

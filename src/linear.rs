@@ -12,58 +12,59 @@ impl LinearRegression {
         y: &[f64],
         alpha: f64,
         epochs: usize,
-        batch_size: usize,
     ) -> Result<Self, &'static str> {
-        let (mut weight, mut bias, _) =
-            Self::fit(x, y, alpha, epochs, batch_size)?;
+        let (mut weight, mut bias, n) = match Self::fit(&x, y, alpha, epochs) {
+            Ok(value) => value,
+            Err(value) => return Err(value),
+        };
 
-        for _epoch in 0..epochs {
-            let mut batch_start = 0;
+        for epoch in 0..epochs {
+            let mut dw = vec![0.0; x.cols()];
+            let mut db = 0.0;
+            let mut loss = 0.0;
 
-            while batch_start < x.rows() {
-                let batch_end = (batch_start + batch_size).min(x.rows());
+            for row in 0..x.rows() {
+                let yi = y[row];
 
-                let mut dw = vec![0.0; x.cols()];
-                let mut db = 0.0;
+                let prediction = weight
+                    .iter()
+                    .enumerate()
+                    .map(|(col, &w)| w * x[[row, col].into()])
+                    .sum::<f64>()
+                    + bias;
 
-                for row in batch_start..batch_end {
-                    let yi = y[row];
+                let error = prediction - yi;
+                loss += error.abs();
 
-                    let prediction = weight
-                        .iter()
-                        .enumerate()
-                        .map(|(col, &w)| w * x[[row, col].into()])
-                        .sum::<f64>()
-                        + bias;
-
-                    let error = prediction - yi;
-
-                    let error_sign = if error > 0.0 {
-                        1.0
-                    } else if error < 0.0 {
-                        -1.0
-                    } else {
-                        0.0
-                    };
-
-                    for col in 0..x.cols() {
-                        dw[col] += error_sign * x[[row, col].into()];
-                    }
-
-                    db += error_sign;
-                }
-
-                let current_batch_size = (batch_end - batch_start) as f64;
+                let error_sign = if error > 0.0 {
+                    1.0
+                } else if error < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                };
 
                 for col in 0..x.cols() {
-                    dw[col] /= current_batch_size;
-                    weight[col] -= alpha * dw[col];
+                    dw[col] += error_sign * x[[row, col].into()];
                 }
 
-                db /= current_batch_size;
-                bias -= alpha * db;
+                db += error_sign;
+            }
 
-                batch_start = batch_end;
+            for col in 0..x.cols() {
+                dw[col] /= n;
+                weight[col] -= alpha * dw[col];
+            }
+
+            db /= n;
+            bias -= alpha * db;
+
+            loss /= n;
+
+            if epoch % 100 == 0 {
+                println!(
+                    "epoch={epoch}, loss={loss:.6}, weight={weight:?}, bias={bias:.4}"
+                );
             }
         }
 
@@ -75,51 +76,42 @@ impl LinearRegression {
         y: &[f64],
         alpha: f64,
         epochs: usize,
-        batch_size: usize,
     ) -> Result<Self, &'static str> {
-        let (mut weight, mut bias, _) = match Self::fit(&x, y, alpha, epochs, batch_size) {
+        let (mut weight, mut bias, n) = match Self::fit(&x, y, alpha, epochs) {
             Ok(value) => value,
             Err(value) => return Err(value),
         };
 
-        for _epoch in 0..epochs {
-            let mut batch_start = 0;
+        for _ in 0..epochs {
+            let mut dw = vec![0.0; x.cols()];
+            let mut db = 0.0;
 
-            while batch_start < x.rows() {
-                let batch_end = (batch_start + batch_size).min(x.rows());
+            for row in 0..x.rows() {
+                let yi = y[row];
 
-                let mut dw = vec![0.0; x.cols()];
-                let mut db = 0.0;
+                let prediction = weight
+                    .iter()
+                    .enumerate()
+                    .map(|(col, &w)| w * x[[row, col].into()])
+                    .sum::<f64>()
+                    + bias;
 
-                for row in batch_start..batch_end {
-                    let prediction = weight
-                        .iter()
-                        .enumerate()
-                        .map(|(col, &w)| w * x[[row, col].into()])
-                        .sum::<f64>()
-                        + bias;
-
-                    let error = prediction - y[row];
-
-                    for col in 0..x.cols() {
-                        dw[col] += 2.0 * error * x[[row, col].into()];
-                    }
-
-                    db += 2.0 * error;
-                }
-
-                let batch_len = (batch_end - batch_start) as f64;
+                let error = prediction - yi;
 
                 for col in 0..x.cols() {
-                    dw[col] /= batch_len;
-                    weight[col] -= alpha * dw[col];
+                    dw[col] += 2.0 * error * x[[row, col].into()];
                 }
 
-                db /= batch_len;
-                bias -= alpha * db;
-
-                batch_start = batch_end;
+                db += 2.0 * error;
             }
+
+            for col in 0..x.cols() {
+                dw[col] /= n;
+                weight[col] -= alpha * dw[col];
+            }
+
+            db /= n;
+            bias -= alpha * db;
         }
 
         Ok(Self { weight, bias })
@@ -130,7 +122,6 @@ impl LinearRegression {
         y: &[f64],
         alpha: f64,
         epochs: usize,
-        batch_size: usize,
     ) -> Result<(Vec<f64>, f64, f64), &'static str> {
         if x.rows() != y.len() {
             return Err("x and y must have the same number of rows");
@@ -150,10 +141,6 @@ impl LinearRegression {
 
         if epochs == 0 {
             return Err("epochs must be greater than zero");
-        }
-
-        if batch_size == 0 {
-            return Err("batch_size must be greater than zero");
         }
 
         let weight = vec![0.0; x.cols()];
